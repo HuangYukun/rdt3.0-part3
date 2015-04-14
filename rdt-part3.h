@@ -112,6 +112,10 @@ int sequence_number_space = 16; // 2^k = 16, can guarantee to be bigger than W=9
 //use int type seq num, need convertion when putting into packet
 int expected_sequence_number_to_receive = 0;
 int next_sequence_number_to_send = 0;
+int client_sender_already_to_receiver = 0;
+int client_sender_already_back_to_sender = 0;
+int server_fd = 0;
+int client_fd = 0;
 
 int rdt_socket();
 int rdt_bind(int fd, u16b_t port);
@@ -173,6 +177,10 @@ int rdt_send(int fd, char * msg, int length){
 //implement the Extended Stop-and-Wait ARQ logic
 
 //must use the udt_send() function to send data via the unreliable layer
+	if (server_fd == 0)
+  		server_fd = fd; //set up only once
+  	if (client_sender_already_to_receiver == 1)
+  		client_sender_already_back_to_sender = 1;
 	int number_of_packets_need_to_send = length / PAYLOAD;
 	if (length % PAYLOAD != 0){
 		number_of_packets_need_to_send++;
@@ -186,31 +194,36 @@ int rdt_send(int fd, char * msg, int length){
 		pkt[i][1] = (unsigned char)next_sequence_number_to_send;
 		// copy application data to payload field
 		if (i != number_of_packets_need_to_send-1){
-			// memcpy(&pkt[4], msg, length);
-			std::copy(msg + i * PAYLOAD, msg + (i+1) * PAYLOAD - 1, &pkt[i][4]);
+			std::copy(msg + i * PAYLOAD, msg + ((i+1) * PAYLOAD), &pkt[i][4]);
 		}else{
-			std::copy(msg + i * PAYLOAD, msg + length-1, &pkt[i][4]);
+			std::copy(msg + i * PAYLOAD, msg + length, &pkt[i][4]);
 		}
 		//set checksum field to zero
 		pkt[i][2] = '0';
 		pkt[i][3] = '0';
+						// 		for (int j=0; j < 4; j++){
+						// 	printf("pkt[%d] = %u\n", j, pkt[i][j]);
+						// }
 		//calculate checksum for whole packet
 		u16b_t ckm = checksum(pkt[i], length+4);
 		//set checksum in the header
 		memcpy(&pkt[i][2], (unsigned char*)&ckm, 2);
+		// for (int j=0; j < 4; j++){
+		// 					printf("pkt[%d] = %u\n", j, pkt[i][j]);
+		// 				}
 		int send;
 		if (i != number_of_packets_need_to_send-1)
 		{
 			if((send = udt_send(fd, pkt[i], PAYLOAD+4, 0)) == -1){
 			 	perror("send");
 			}
-			printf("SEND out data = %d bytes\n", send);
+			printf("SEND out data = %d bytes, seq#=%d\n", send, next_sequence_number_to_send);
 		}
 		else{
 			if((send = udt_send(fd, pkt[i], length - (number_of_packets_need_to_send-1)*PAYLOAD+4, 0)) == -1){
 			 	perror("send");
 			}
-			printf("SEND out data = %d bytes\n", send);
+			printf("SEND out data = %d bytes, seq#=%d\n", send, next_sequence_number_to_send);
 		}
 		required_ACKs.push_back(next_sequence_number_to_send);
 		if (next_sequence_number_to_send < sequence_number_space-1)
@@ -246,25 +259,29 @@ int rdt_send(int fd, char * msg, int length){
 	  	for (std::vector<int>::iterator it = required_ACKs.begin() ; it != required_ACKs.end(); ++it){
 	  		//it stores the seq number not getting ACK yet
 	  		//the data can be calculated by the_cACK_meaning_whole_packet_received
+	  		int send;
 	  		if (*it > the_cACK_meaning_whole_packet_received){
 	  			int buffered_pkt_sequence = number_of_packets_need_to_send - (the_cACK_meaning_whole_packet_received + sequence_number_space - *it);
-	  			udt_send(fd, pkt[buffered_pkt_sequence-1], PAYLOAD+4, 0);
+	  			send = udt_send(fd, pkt[buffered_pkt_sequence-1], PAYLOAD+4, 0);
+	  			printf("resend packet of size = %d\n", send);
 	  		}
 	  		else if (*it == the_cACK_meaning_whole_packet_received){
-	  			udt_send(fd, pkt[number_of_packets_need_to_send-1], length - (number_of_packets_need_to_send-1)*PAYLOAD+4, 0);
+	  			send = udt_send(fd, pkt[number_of_packets_need_to_send-1], length - (number_of_packets_need_to_send-1)*PAYLOAD+4, 0);
+	  			printf("resend packet of size = %d\n", send);
 	  		}
 	  		else{
 	  			int buffered_pkt_sequence = number_of_packets_need_to_send - (the_cACK_meaning_whole_packet_received - *it);
-	  			udt_send(fd, pkt[buffered_pkt_sequence-1], PAYLOAD+4, 0);
+	  			send = udt_send(fd, pkt[buffered_pkt_sequence-1], PAYLOAD+4, 0);
+	  			printf("resend packet of size = %d\n", send);
 	  		}
 	  	}
 	  	continue;
 	  }
-	}
 	for(;;){
 	  	if (FD_ISSET(fd, &read_fds)){
 	  		int nbytes;
 	  		nbytes = recv(fd, buf, sizeof buf, 0);
+	  		printf("SEND receive msg of size %d\n", nbytes);
 	  		u16b_t ACK_check = checksum(buf, 4);
 	  		u8b_t checksum_in_char[2];
 			memcpy(&checksum_in_char[0], (unsigned char*)&ACK_check, 2);
@@ -278,7 +295,8 @@ int rdt_send(int fd, char * msg, int length){
 					perror("recv");
 				}
 			}else {
-				if (checksum_in_char[0]!='0' || checksum_in_char[1]!='0'){
+				// if (checksum_in_char[0]!='0' || checksum_in_char[1]!='0'){
+				if (buf[0] == '1'){
 					//not necessarily corrupted
 					if (buf[0] == '0'){
 						perror("corrupted");
@@ -286,42 +304,51 @@ int rdt_send(int fd, char * msg, int length){
 					}
 					else{
 						//data
-						// ACK ack;
-						// ack[0] = '0'; //packet type, 0 is ACK
-						// ack[2] = '0';
-						// ack[3] = '0';
-						// ack[1] = '0';//it can only 0 based on the sequence
+						printf("SENDER get data\n");
+						ACK ack;
+						ack[0] = '0'; //packet type, 0 is ACK
+						ack[2] = '0';
+						ack[3] = '0';
+						ack[1] = '0';//it can only be 0 based on the sequence
 						// //so resend the ACK if it's only if it's "old"
 						// // printf("senderCOUNT = %d\n", sender_count);
-						// if (fd == client_fd && client_sender_already_back_to_sender != 1){
-						// 	//ignore the new data msg
-						// 	ack[1] = '1';
-						// 	u16b_t ckm = checksum(ack, 4);
-						// 	memcpy(&ack[2], (unsigned char*)&ckm, 2);
-						// 	udt_send(fd, ack, 4, 0);
-						// 	printf("UNIQUE ACK1 sent\n");
-						// 	break;
-						// }
-						// else if (fd == server_fd && client_sender_already_to_receiver == 1){
-						// 	u16b_t ckm = checksum(ack, 4);
-						// 	memcpy(&ack[2], (unsigned char*)&ckm, 2);
-						// 	if (udt_send(fd, ack, 4, 0) == -1){
-						// 		perror("send");
-						// 	}
-						// 	else{
-						// 		printf("UNIQUE ACK0 sent\n");
-						// 		break;
-						// 	}
-						// }
-						// else{
-						// 	//ignore
-						// }
+						if (fd == client_fd && client_sender_already_back_to_sender != 1){
+							//ignore the new data msg
+							ack[1] = '1';
+							u16b_t ckm = checksum(ack, 4);
+							memcpy(&ack[2], (unsigned char*)&ckm, 2);
+							udt_send(fd, ack, 4, 0);
+							printf("UNIQUE ACK1 sent\n");
+							break;
+						}
+						else if (fd == server_fd && client_sender_already_to_receiver == 1){
+							u16b_t ckm = checksum(ack, 4);
+							memcpy(&ack[2], (unsigned char*)&ckm, 2);
+							if (udt_send(fd, ack, 4, 0) == -1){
+								perror("send");
+							}
+							else{
+								printf("UNIQUE ACK0 sent\n");
+								break;
+							}
+						}
+						else{
+							printf("strange thigns\n");
+							printf("\n");
+							//ignore
+						}
 					}
 				}
 				else{
 					//if is ACK
 					if (buf[0] == '0'){
-						if (buf[1] == (unsigned char)the_cACK_meaning_whole_packet_received){
+						// printf("ACK%u get, expecting = %d \n", the_cACK_meaning_whole_packet_received, the_cACK_meaning_whole_packet_received);
+						// printf("buf[1] = %c, ACK get = %u\n", buf[1],(unsigned char)the_cACK_meaning_whole_packet_received);
+						//you cannot imagine how much I suffer doing casting
+						if (buf[1] == '0' && the_cACK_meaning_whole_packet_received == 0){
+							return length;
+						}
+						else if (buf[1] == (unsigned char)the_cACK_meaning_whole_packet_received){
 							//the whole msg is received by its peer
 							printf("cACK%u get, whole msg successfully received!\n", buf[1]);
 							return length; //not counting the size of headers
@@ -329,11 +356,13 @@ int rdt_send(int fd, char * msg, int length){
 						else{
 							for (std::vector<int>::iterator it = required_ACKs.begin() ; it != required_ACKs.end(); ++it){
 								if (buf[1] == (unsigned char)*it){
+									printf("ACK%u received!\n", buf[1]);
 									required_ACKs.erase(it);
 									//restart timer
 									break;
 								}
 							}
+							break;
 						}
 					}
 					else {
@@ -346,6 +375,7 @@ int rdt_send(int fd, char * msg, int length){
 			}
 	  	}
 	  }
+	}
 }
 
 /* Application process calls this function to wait for a message of any
@@ -357,16 +387,22 @@ int rdt_send(int fd, char * msg, int length){
 */
 int rdt_recv(int fd, char * msg, int length){
 //implement the Extended Stop-and-Wait ARQ logic
+	if (client_fd == 0)
+		client_fd = fd;
+	if (fd == server_fd)
+		client_sender_already_to_receiver = 1;
+	printf("waiting for message\n");
 	for(;;) {
 		int receiveBytes = recv(fd, msg, length+4, 0);
-		printf("receive msg of size %d\n", receiveBytes);
+		// printf("last byte = %c\n", msg[receiveBytes-1]);
+		printf("RECV receive msg of size %d\n", receiveBytes);
 		if (receiveBytes <= 0){
 			if (receiveBytes == 0) {
-				// connection closed
-					printf("selectserver: socket %d hung up\n", fd);
-				} else {
-					perror("recv");
-				}
+			// connection closed
+				printf("selectserver: socket %d hung up\n", fd);
+			} else {
+				perror("recv");
+			}
 		}
 		u8b_t* checksum_msg = (u8b_t*)msg;
 		u16b_t ckm = checksum(checksum_msg, receiveBytes);
@@ -377,9 +413,11 @@ int rdt_recv(int fd, char * msg, int length){
 		ack[0] = '0'; //packet type, 0 is ACK
 		ack[2] = '0';
 		ack[3] = '0';
+		// printf("unsigned short ckm: %hu\n", ckm);
 		// printf("checksum_in_char: %u, %u\n", checksum_in_char[0], checksum_in_char[1]);
-		if (checksum_in_char[0] != '0' || checksum_in_char[1] != '0'){
+		if (false){
 			//corrupted
+			printf("message corrupted\n");
 			//resend last ACK
 			int last_sent_ACK;
 				if (expected_sequence_number_to_receive - 1 <0){
@@ -394,28 +432,42 @@ int rdt_recv(int fd, char * msg, int length){
 				if (udt_send(fd, ack, 4, 0) == -1){
 					perror("send");
 				}
+				else{
+					printf("resend ACK=%d, expecting = %d \n",last_sent_ACK, expected_sequence_number_to_receive);
+				}
 		}else{
 			if (msg[0] == '1'){
 				//is DATA
 				//is also expected
 				if (msg[1] == (unsigned char)expected_sequence_number_to_receive){
+					printf("receive expected data\n");
 					ack[1] = msg[1];
 					u16b_t ckm = checksum(ack, 4);
 					memcpy(&ack[2], (unsigned char*)&ckm, 2);
 					if (udt_send(fd, ack, 4, 0) == -1){
 							perror("send");
-						}
+					}
 					else{
+						printf("send ACK=%d \n",expected_sequence_number_to_receive);
 						if (expected_sequence_number_to_receive < sequence_number_space - 1){
 							expected_sequence_number_to_receive++;
 						}
 						else{
 							expected_sequence_number_to_receive = 0;
 						}
+						// for (int i=0; i < receiveBytes; i++){
+						// 	printf("msg[%d] = %c\n", i, msg[i]);
+						// }
+						for (int i=0; i < receiveBytes-4; i++){
+							msg[i] = msg[i+4];
+						}
+						msg[receiveBytes-4] = '\0';
+
 						return receiveBytes - 4;
 					}
 				}else{
 					// not expected data, resend last ACK
+					printf("not expected data, expecting %d\n", expected_sequence_number_to_receive);
 					int last_sent_ACK;
 					if (expected_sequence_number_to_receive - 1 <0){
 						last_sent_ACK = sequence_number_space - 1;
@@ -432,20 +484,20 @@ int rdt_recv(int fd, char * msg, int length){
 				}
 			}else{
 				//is ACK
-				// ACK ack;
-				// ack[0] = '0'; //packet type, 0 is ACK
-				// ack[2] = '0';
-				// ack[3] = '0';
-				// ack[1] = '1';
-				// u16b_t ckm = checksum(ack, 4);
-				// // printf("unsigned short ckm: %hu\n", ckm);
-				// memcpy(&ack[2], (unsigned char*)&ckm, 2);
-				// if (udt_send(fd, ack, 4, 0) == -1){
-				// 	perror("send");
-				// }
-				// else{
-				// 	printf("ACK1 sent, for replying sender\n");
-				// }
+				ACK ack;
+				ack[0] = '0'; //packet type, 0 is ACK
+				ack[2] = '0';
+				ack[3] = '0';
+				ack[1] = '1';
+				u16b_t ckm = checksum(ack, 4);
+				// printf("unsigned short ckm: %hu\n", ckm);
+				memcpy(&ack[2], (unsigned char*)&ckm, 2);
+				if (udt_send(fd, ack, 4, 0) == -1){
+					perror("send");
+				}
+				else{
+					printf("ACK1 sent, for replying sender\n");
+				}
 			}
 		}
 	}
