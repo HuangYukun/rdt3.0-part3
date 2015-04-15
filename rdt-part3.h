@@ -24,7 +24,7 @@ Compilation:
 #define TWAIT 10*TIMEOUT	//Each peer keeps an eye on the receiving  
 							//end for TWAIT time units before closing
 							//For retransmission of missing last ACK
-#define W 1					//For Extended S&W - define pipeline window size
+#define W 5					//For Extended S&W - define pipeline window size
 
 
 //----- Type defines ----------------------------------------------------------
