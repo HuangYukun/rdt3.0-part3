@@ -149,8 +149,7 @@ int main(void)
 				if (i == sockfd) {
 					// handle new connections
 					addrlen = sizeof remoteaddr;
-					newfd = accept(sockfd,
-						(struct sockaddr *)&remoteaddr,
+					newfd = accept(sockfd,						(struct sockaddr *)&remoteaddr,
 						&addrlen);
 
 					if (newfd == -1) {
@@ -182,7 +181,7 @@ int main(void)
 					} else {
 						// we got some data from a client
 						for(j = 0; j <= fdmax; j++) {
-							// send to everyone!
+							// seld to everyone!
 							if (FD_ISSET(j, &master)) {
 								// except the sockfd and ourselves
 								if (j != sockfd && j != i) {
