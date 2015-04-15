@@ -53,7 +53,16 @@ int main(int argc, char *argv[]){
 	if (s != NULL) ERR_RATE = strtof(s, NULL);
 	printf("PACKET_LOSS_RATE = %.2f, PACKET_ERR_RATE = %.2f\n", LOSS_RATE, ERR_RATE);
 
-	unsigned char testNum = '0';
+	// Packet pkt;
+	// pkt[0] = '1'; // type of packet, 1 for data
+	// pkt[1] = next_sequence_number_to_send;
+	// unsigned char testNum = 0;
+	// printf("testNUM = %u\n", testNum);
+	// printf("testNUM + 1= %u\n", testNum + 1);
+	// // unsigned char testNumADD = '1';
+	// if(testNum+1 == 1 ){
+	// 	printf("Jesus\n");
+	// }
 
 	fname=argv[2];
 	//open file
