@@ -1,12 +1,12 @@
 /**************************************************************
 rdt-part3.h
-Student name:
-Student No. :
-Date and version:
-Development platform:
-Development language:
+Student name: Huang Yukun
+Student No. : 3035030808
+Date and version: 4/15/2015, v1.0
+Development platform: Ubuntu 12.04
+Development language: C
 Compilation:
-	Can be compiled with
+	Can be compiled with g++
 *****************************************************************/
 
 #ifndef RDT3_H
@@ -419,6 +419,7 @@ int rdt_recv(int fd, char * msg, int length){
 		ack[3] = '0';
 		// printf("unsigned short ckm: %hu\n", ckm);
 		// printf("checksum_in_char: %u, %u\n", checksum_in_char[0], checksum_in_char[1]);
+		// if (false){
 		if (checksum_in_char[0]!='0' || checksum_in_char[1]!='0'){
 				//corrupted
 				printf("message corrupted\n");

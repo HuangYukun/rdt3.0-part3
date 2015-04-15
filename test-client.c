@@ -53,6 +53,8 @@ int main(int argc, char *argv[]){
 	if (s != NULL) ERR_RATE = strtof(s, NULL);
 	printf("PACKET_LOSS_RATE = %.2f, PACKET_ERR_RATE = %.2f\n", LOSS_RATE, ERR_RATE);
 
+	unsigned char testNum = '0';
+
 	fname=argv[2];
 	//open file
 	if (!(testfile = fopen(fname, "r"))) {
