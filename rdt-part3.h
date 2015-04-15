@@ -207,12 +207,6 @@ int rdt_send(int fd, char * msg, int length){
 			u16b_t ckm = checksum(pkt[i], length - (number_of_packets_need_to_send-1)*PAYLOAD+4);
 			memcpy(&pkt[i][2], (unsigned char*)&ckm, 2);
 		}
-		
-		//calculate checksum for whole packet
-		// printf("WHATS the LENGTH: %d\n", length);
-		// u16b_t ckm = checksum(pkt[i], length+4);
-		// //set checksum in the header
-		// memcpy(&pkt[i][2], (unsigned char*)&ckm, 2);
 		int send;
 		if (i != number_of_packets_need_to_send-1)
 		{
@@ -241,14 +235,14 @@ int rdt_send(int fd, char * msg, int length){
 	fd_set read_fds;
 	FD_ZERO(&read_fds);
 
-	u8b_t buf[4]; //header size
 	FD_SET(fd, &read_fds);
+
+	u8b_t buf[4]; //header size
+	
 	for(;;) {
 	  //repeat until received expected ACK
-  	  // FD_SET(fd, &read_fds);
 	  //setting timeout
 	  timer.tv_sec = 0;
-	  // timer.tv_usec = 0;
 	  timer.tv_usec = TIMEOUT;
 	  int status;
 	  status = select(fd+1, &read_fds, NULL, NULL, &timer);
@@ -340,8 +334,6 @@ int rdt_send(int fd, char * msg, int length){
 								}
 							}
 							else{
-								printf("strange thigns\n");
-								printf("break\n");
 								//ignore
 								break;
 							}
@@ -350,9 +342,6 @@ int rdt_send(int fd, char * msg, int length){
 					else{
 						//if is ACK
 						if (buf[0] == '0'){
-							// printf("ACK%u get, expecting = %d \n", the_cACK_meaning_whole_packet_received, the_cACK_meaning_whole_packet_received);
-							// printf("buf[1] = %c, ACK get = %u\n", buf[1],(unsigned char)the_cACK_meaning_whole_packet_received);
-							//you cannot imagine how much I suffer doing casting
 							if (buf[1] == (unsigned char)the_cACK_meaning_whole_packet_received){
 								//the whole msg is received by its peer
 								printf("cACK%u get, whole msg successfully received!\n", buf[1]);
@@ -370,12 +359,6 @@ int rdt_send(int fd, char * msg, int length){
 								FD_SET(fd, &read_fds);
 								break;
 							}
-						}
-						else {
-							// //if is data
-							// printf("SENDER receive Dataaaaaaaaaaaaaaaaaaaa\n");
-							// //this is a sender, how can we receive it
-							// //ignore it
 						}
 					}
 				}
@@ -462,9 +445,6 @@ int rdt_recv(int fd, char * msg, int length){
 						else{
 							expected_sequence_number_to_receive = 0;
 						}
-						// for (int i=0; i < receiveBytes; i++){
-						// 	printf("msg[%d] = %c\n", i, msg[i]);
-						// }
 						for (int i=0; i < receiveBytes-4; i++){
 							msg[i] = msg[i+4];
 						}
