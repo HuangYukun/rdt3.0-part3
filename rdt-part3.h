@@ -419,7 +419,7 @@ int rdt_recv(int fd, char * msg, int length){
 		ack[3] = '0';
 		// printf("unsigned short ckm: %hu\n", ckm);
 		// printf("checksum_in_char: %u, %u\n", checksum_in_char[0], checksum_in_char[1]);
-		if (checksum_in_char[0]!='0' || checksum_in_char[1]!='0'){
+		if (false){
 				//corrupted
 				printf("message corrupted\n");
 				//resend last ACK
