@@ -243,7 +243,6 @@ int rdt_send(int fd, char * msg, int length){
 	FD_SET(fd, &read_fds);
 	for(;;) {
 	  //repeat until received expected ACK
-	  printf("after break\n");
   	  // FD_SET(fd, &read_fds);
 	  //setting timeout
 	  timer.tv_sec = 0;
@@ -350,8 +349,8 @@ int rdt_send(int fd, char * msg, int length){
 					else{
 						//if is ACK
 						if (buf[0] == '0'){
-							printf("ACK%u get, expecting = %d \n", the_cACK_meaning_whole_packet_received, the_cACK_meaning_whole_packet_received);
-							printf("buf[1] = %c, ACK get = %u\n", buf[1],(unsigned char)the_cACK_meaning_whole_packet_received);
+							// printf("ACK%u get, expecting = %d \n", the_cACK_meaning_whole_packet_received, the_cACK_meaning_whole_packet_received);
+							// printf("buf[1] = %c, ACK get = %u\n", buf[1],(unsigned char)the_cACK_meaning_whole_packet_received);
 							//you cannot imagine how much I suffer doing casting
 							if (buf[1] == (unsigned char)the_cACK_meaning_whole_packet_received){
 								//the whole msg is received by its peer
@@ -521,6 +520,7 @@ int rdt_close(int fd){
 
 	FD_SET(fd, &read_fds);
 	int status;
+	u8b_t buf[4];
 	for (;;){
 		//setting timeout
 		timer.tv_sec = 0;
@@ -535,27 +535,38 @@ int rdt_close(int fd){
 		}
 		else{
 		  	if (FD_ISSET(fd, &read_fds)){
-		  		ACK ack;
-				ack[0] = '0';
-				ack[2] = '0';
-				ack[3] = '0';
-				// int number = sequencenumbertore;
-				// ack[1] =  (unsigned char) number;//of course it needs modification
-				int last_sent_ACK;
-				if (expected_sequence_number_to_receive - 1 <0){
-					last_sent_ACK = sequence_number_space - 1;
+		  		recv(fd, buf, sizeof buf, 0);
+		  		u16b_t ACK_check = checksum(buf, 4);
+		  		u8b_t checksum_in_char[2];
+				memcpy(&checksum_in_char[0], (unsigned char*)&ACK_check, 2);
+				if (checksum_in_char[0]!='0' || checksum_in_char[1]!='0'){
+					//ACK
+					printf("get ACK, terminate\n");
 				}
 				else{
-					last_sent_ACK = expected_sequence_number_to_receive - 1;
-				}
-				ack[1] = (unsigned char) last_sent_ACK;
-				u16b_t ckm = checksum(ack, 4);
-				memcpy(&ack[2], (char*)&ckm, 2);
-				if (udt_send(fd, ack, 4, 0) == -1){
-					perror("send");
-				}
-				else{
-
+					//data
+					ACK ack;
+					ack[0] = '0';
+					ack[2] = '0';
+					ack[3] = '0';
+					// int number = sequencenumbertore;
+					// ack[1] =  (unsigned char) number;//of course it needs modification
+					int last_sent_ACK;
+					if (expected_sequence_number_to_receive - 1 <0){
+						last_sent_ACK = sequence_number_space - 1;
+					}
+					else{
+						last_sent_ACK = expected_sequence_number_to_receive - 1;
+					}
+					ack[1] = (unsigned char) last_sent_ACK;
+					u16b_t ckm = checksum(ack, 4);
+					memcpy(&ack[2], (char*)&ckm, 2);
+					if (udt_send(fd, ack, 4, 0) == -1){
+						perror("send");
+					}
+					else{
+						printf("CLOSE resend ACK = %u\n", ack[1]);
+					}
 				}
 			}
 		}
