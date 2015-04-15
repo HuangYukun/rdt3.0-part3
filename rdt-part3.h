@@ -288,7 +288,7 @@ int rdt_send(int fd, char * msg, int length){
 		  		u16b_t ACK_check = checksum(buf, 4);
 		  		u8b_t checksum_in_char[2];
 				memcpy(&checksum_in_char[0], (unsigned char*)&ACK_check, 2);
-				printf("checksum_in_char: %u, %u\n", checksum_in_char[0], checksum_in_char[1]);
+				// printf("checksum_in_char: %u, %u\n", checksum_in_char[0], checksum_in_char[1]);
 		  		if (nbytes <= 0) {
 					// got error or connection closed by client
 					if (nbytes == 0) {
@@ -397,7 +397,7 @@ int rdt_recv(int fd, char * msg, int length){
 		client_fd = fd;
 	if (fd == server_fd)
 		client_sender_already_to_receiver = 1;
-	printf("waiting for message\n");
+	// printf("waiting for message\n");
 	for(;;) {
 		int receiveBytes = recv(fd, msg, length+4, 0);
 		// printf("last byte = %c\n", msg[receiveBytes-1]);
@@ -420,7 +420,7 @@ int rdt_recv(int fd, char * msg, int length){
 		ack[2] = '0';
 		ack[3] = '0';
 		// printf("unsigned short ckm: %hu\n", ckm);
-		printf("checksum_in_char: %c, %c\n", checksum_in_char[0], checksum_in_char[1]);
+		// printf("checksum_in_char: %c, %c\n", checksum_in_char[0], checksum_in_char[1]);
 		// if (false){
 		if (checksum_in_char[0]!='0' || checksum_in_char[1]!='0'){
 				//corrupted
